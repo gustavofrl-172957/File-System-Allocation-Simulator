@@ -1,0 +1,14 @@
+{
+  "name": "file-system-allocation-simulator-monorepo",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c magenta,cyan \"pnpm --filter backend dev\" \"pnpm --filter frontend dev\"",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter backend start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
+
