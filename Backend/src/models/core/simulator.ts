@@ -95,7 +95,7 @@ export class Simulator {
 
   readFile(req: ReadRequest): ReadResult {
     const strat = strategies[this.state.method];
-    return strat.read(this.state.disk, this.state.dir, req);
+    return strat.read(this.state.disk, this.state.dir, req, this.state.costs);
   }
 
   getDirectory(): DirectoryTable {

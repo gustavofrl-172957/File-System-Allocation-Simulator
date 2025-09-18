@@ -8,7 +8,8 @@ import {
   BlockId,
   Block,
   ReadRequest,
-  ReadResult
+  ReadResult,
+  Costs
 } from '../types';
 
 function findFreeBlocks(disk: Disk, size: number): BlockId[] {
@@ -75,25 +76,31 @@ export const indexedStrategy: AllocationStrategy = {
     });
     delete dir.files[name];
   },
-  read(disk, dir, req) {
+  read(disk, dir, req, costs) {
     const entry = dir.files[req.name];
     if (!entry || entry.method !== 'indexada') throw new Error('Arquivo não encontrado ou método incorreto');
     const indexedEntry = entry as IndexedFileEntry;
     const steps = [];
     if (req.mode === 'sequencial') {
-      steps.push({ block: indexedEntry.inodeId, incrementalCost: 1 });
+      // Custo: Cseek + Cread (ler índice) + (numBlocos * Cread)
+      const totalCost = costs.Cseek + costs.Cread + ((indexedEntry.dataBlocks?.length || 0) * costs.Cread);
+      // Primeiro lê o índice
+      steps.push({ block: indexedEntry.inodeId, incrementalCost: costs.Cread });
+      // Depois lê cada bloco de dados
       (indexedEntry.dataBlocks || []).forEach(id => {
-        steps.push({ block: id, incrementalCost: 1 });
+        steps.push({ block: id, incrementalCost: costs.Cread });
       });
-      return { totalCost: (indexedEntry.dataBlocks?.length || 0) + 1, steps };
+      return { totalCost, steps };
     } else {
       const k = Math.min(req.randomReads || 1, indexedEntry.dataBlocks?.length || 0);
+      // Para acesso aleatório: Cseek + (k * Cread) - cada acesso consulta o índice
+      const totalCost = costs.Cseek + (k * costs.Cread);
       for (let j = 0; j < k; j++) {
         const idx = Math.floor(Math.random() * (indexedEntry.dataBlocks?.length || 0));
         const block = (indexedEntry.dataBlocks || [])[idx];
-        steps.push({ block, incrementalCost: 1 });
+        steps.push({ block, incrementalCost: costs.Cread });
       }
-      return { totalCost: k, steps };
+      return { totalCost, steps };
     }
   },
   metrics(disk, dir) {

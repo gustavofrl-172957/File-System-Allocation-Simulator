@@ -62,7 +62,7 @@ export interface AllocationStrategy {
   create(disk: Disk, dir: DirectoryTable, name: string, size: number): FileEntry;
   extend(disk: Disk, dir: DirectoryTable, name: string, delta: number): FileEntry;
   remove(disk: Disk, dir: DirectoryTable, name: string): void;
-  read(disk: Disk, dir: DirectoryTable, req: ReadRequest): ReadResult;
+  read(disk: Disk, dir: DirectoryTable, req: ReadRequest, costs: Costs): ReadResult;
   metrics(disk: Disk, dir: DirectoryTable): Record<string, number>;
 }
 

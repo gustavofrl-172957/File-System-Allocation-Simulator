@@ -8,7 +8,8 @@ import {
   BlockId,
   Block,
   ReadRequest,
-  ReadResult
+  ReadResult,
+  Costs
 } from '../types';
 
 function findContiguousFreeBlocks(disk: Disk, size: number): BlockId | null {
@@ -93,23 +94,27 @@ export const contiguousStrategy: AllocationStrategy = {
     }
     delete dir.files[name];
   },
-  read(disk, dir, req) {
+  read(disk, dir, req, costs) {
     const entry = dir.files[req.name];
     if (!entry || entry.method !== 'contigua') throw new Error('Arquivo não encontrado ou método incorreto');
     const contiguousEntry = entry as ContiguousFileEntry;
     const steps = [];
     if (req.mode === 'sequencial') {
+      // Custo: Cseek + (numBlocos * Cread)
+      const totalCost = costs.Cseek + (contiguousEntry.sizeBlocks * costs.Cread);
       for (let i = contiguousEntry.start; i < contiguousEntry.start + contiguousEntry.sizeBlocks; i++) {
-        steps.push({ block: i, incrementalCost: 1 });
+        steps.push({ block: i, incrementalCost: costs.Cread });
       }
-      return { totalCost: contiguousEntry.sizeBlocks, steps };
+      return { totalCost, steps };
     } else {
       const k = Math.min(req.randomReads || 1, contiguousEntry.sizeBlocks);
+      // Para leitura aleatória: Cseek + (k * Cread) - cada acesso aleatório precisa de seek
+      const totalCost = (k * costs.Cseek) + (k * costs.Cread);
       for (let j = 0; j < k; j++) {
         const block = contiguousEntry.start + Math.floor(Math.random() * contiguousEntry.sizeBlocks);
-        steps.push({ block, incrementalCost: 1 });
+        steps.push({ block, incrementalCost: costs.Cseek + costs.Cread });
       }
-      return { totalCost: k, steps };
+      return { totalCost, steps };
     }
   },
   metrics(disk, dir) {

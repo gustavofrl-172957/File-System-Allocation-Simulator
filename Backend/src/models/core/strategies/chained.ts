@@ -8,7 +8,8 @@ import {
   BlockId,
   Block,
   ReadRequest,
-  ReadResult
+  ReadResult,
+  Costs
 } from '../types';
 
 function findFreeBlocks(disk: Disk, size: number): BlockId[] {
@@ -74,26 +75,32 @@ export const chainedStrategy: AllocationStrategy = {
     });
     delete dir.files[name];
   },
-  read(disk, dir, req) {
+  read(disk, dir, req, costs) {
     const entry = dir.files[req.name];
     if (!entry || entry.method !== 'encadeada') throw new Error('Arquivo não encontrado ou método incorreto');
     const chainedEntry = entry as ChainedFileEntry;
     const steps = [];
     if (req.mode === 'sequencial') {
+      // Custo: Cseek + (numBlocos * Cread) + ((numBlocos-1) * Cptr)
+      // Cptr é o custo de seguir ponteiros entre blocos
+      const totalCost = costs.Cseek + (chainedEntry.sizeBlocks * costs.Cread) + ((chainedEntry.sizeBlocks - 1) * costs.Cptr);
       let id = chainedEntry.head;
       for (let i = 0; i < chainedEntry.sizeBlocks; i++) {
-        steps.push({ block: id, incrementalCost: 1 });
+        const incrementalCost = i === 0 ? costs.Cread : costs.Cread + costs.Cptr;
+        steps.push({ block: id, incrementalCost });
         id = disk.blocks[id].next ?? id;
       }
-      return { totalCost: chainedEntry.sizeBlocks, steps };
+      return { totalCost, steps };
     } else {
       const k = Math.min(req.randomReads || 1, chainedEntry.sizeBlocks);
+      // Para acesso aleatório: Cseek + (k * Cread) + overhead para navegar na cadeia
+      const totalCost = costs.Cseek + (k * costs.Cread) + (k * costs.Cptr);
       for (let j = 0; j < k; j++) {
         const idx = Math.floor(Math.random() * chainedEntry.sizeBlocks);
         const block = (chainedEntry.chain || [])[idx];
-        steps.push({ block, incrementalCost: 1 });
+        steps.push({ block, incrementalCost: costs.Cread + costs.Cptr });
       }
-      return { totalCost: k, steps };
+      return { totalCost, steps };
     }
   },
   metrics(disk, dir) {
